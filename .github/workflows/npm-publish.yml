@@ -32,8 +32,18 @@ jobs:
       - name: Typecheck
         run: bun run typecheck
 
+      - name: Build
+        run: bun run build
+
       - name: Unit tests
         run: bun run test:unit
+
+      - name: Fetch upstream reference fixture
+        run: |
+          mkdir -p fixtures/upstream/not-claude-code-emulator/5541e5c1cb0895cfd4390391dc642c74fc5d0a1a
+          curl -fsSL \
+            "https://raw.githubusercontent.com/code-yeongyu/not-claude-code-emulator/5541e5c1cb0895cfd4390391dc642c74fc5d0a1a/README.md" \
+            -o "fixtures/upstream/not-claude-code-emulator/5541e5c1cb0895cfd4390391dc642c74fc5d0a1a/README.md"
 
       - name: Publish safety check
         run: bun run check:publish-safety
@@ -48,6 +58,6 @@ jobs:
           registry-url: "https://registry.npmjs.org"
 
       - name: Publish to npm
-        run: npm publish --access public
+        run: npm publish --access public --ignore-scripts
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
