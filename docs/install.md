@@ -15,6 +15,11 @@ and does not require a separate auth peer plugin.
 
 ## Step 1: Install the emulator
 
+> **Upstream archived**: The `not-claude-code-emulator` repository was archived
+> on 2026-04-01. Both installation methods below still work — the npm package
+> remains published and the repository remains cloneable. No new releases or
+> patches will be issued from upstream.
+
 You have two options for installing the emulator:
 
 ### Option A: npm global install (recommended)
@@ -24,6 +29,9 @@ The easiest way to install the emulator:
 ```bash
 npm install -g not-claude-code-emulator
 ```
+
+The npm package (`1.0.3`) is published and installable regardless of the
+repository archive status.
 
 ### Option B: git clone (still supported)
 
@@ -36,8 +44,9 @@ cd not-claude-code-emulator
 git checkout 5541e5c1cb0895cfd4390391dc642c74fc5d0a1a
 ```
 
-This specific commit is the pinned v1 target. Do not use a different version
-unless you understand the compatibility implications.
+Archived repositories remain cloneable on GitHub. This specific commit is the
+pinned v1 target. Do not use a different version unless you understand the
+compatibility implications.
 
 Both methods are supported. npm global install is recommended for simplicity.
 

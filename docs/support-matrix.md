@@ -6,6 +6,11 @@ fixture locks below.
 
 - `not-claude-code-emulator` -> `5541e5c1cb0895cfd4390391dc642c74fc5d0a1a`
 
+> **Note**: The `not-claude-code-emulator` upstream repository was archived on
+> **2026-04-01**. The npm package (`1.0.3`) and pinned git commit remain
+> installable. No future updates from upstream are expected. See
+> [`compatibility.md`](compatibility.md) for full impact analysis.
+
 Note: Unlike the OpenCode variant, there is no auth peer plugin fixture. OpenClaw
 provides native Anthropic auth, eliminating the need for a separate auth plugin.
 

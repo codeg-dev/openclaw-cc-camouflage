@@ -17,6 +17,27 @@ provides native Anthropic auth.
 This commit is verified through SHA256 checksums in `patches/manifest.json`.
 Any deviation from this fixture is classified as drift.
 
+## Upstream archive status
+
+The `not-claude-code-emulator` repository
+(`code-yeongyu/not-claude-code-emulator`) was **archived on 2026-04-01**.
+
+What this means for users:
+
+- **Existing installs**: No impact. The emulator runs locally; archive status
+  does not affect running processes.
+- **New installs via npm**: `npm install -g not-claude-code-emulator` continues
+  to work. The npm package (`1.0.3`) remains published and installable.
+- **New installs via git clone**: `git clone` and `git checkout 5541e5c` work
+  as before. Archived repositories on GitHub remain cloneable (read-only).
+- **No future patches**: The upstream will not receive bug fixes, security
+  patches, or API compatibility updates. If Anthropic changes the Claude Code
+  OAuth flow, the emulator will not be updated.
+
+The `compat:canary` reports archived status as a warning (`WARN`) rather than a
+failure. Archive status is informational — it signals no further upstream
+development, but does not indicate a broken installation.
+
 ## Platform compatibility
 
 | Platform | v1 Status | Notes |

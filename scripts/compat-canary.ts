@@ -13,6 +13,7 @@ interface ManifestFile {
 interface ReferenceFixture {
   name: string
   upstream: {
+    repo: string
     sha: string
   }
   files: ManifestFile[]
@@ -24,10 +25,19 @@ interface Manifest {
   referenceFixtures?: ReferenceFixture[]
 }
 
+type CheckStatus = 'ok' | 'fail' | 'warn' | 'skip'
+
 interface CheckResult {
   name: string
-  passed: boolean
+  status: CheckStatus
   message: string
+  /** @deprecated Use status === 'ok' */
+  passed: boolean
+}
+
+interface GitHubRepoResponse {
+  archived?: boolean
+  message?: string
 }
 
 const PROJECT_ROOT = resolve(import.meta.dir, '..')
@@ -36,6 +46,26 @@ const SUPPORTED_PLATFORMS = new Set(['darwin', 'linux', 'win32'])
 const PINNED = {
   'not-claude-code-emulator': '5541e5c1cb0895cfd4390391dc642c74fc5d0a1a',
 } as const
+
+const UPSTREAM_REPOS: Record<string, string> = {
+  'not-claude-code-emulator': 'https://api.github.com/repos/code-yeongyu/not-claude-code-emulator',
+}
+
+function ok(name: string, message: string): CheckResult {
+  return { name, status: 'ok', passed: true, message }
+}
+
+function fail(name: string, message: string): CheckResult {
+  return { name, status: 'fail', passed: false, message }
+}
+
+function warn(name: string, message: string): CheckResult {
+  return { name, status: 'warn', passed: true, message }
+}
+
+function skip(name: string, message: string): CheckResult {
+  return { name, status: 'skip', passed: true, message }
+}
 
 function sha256File(path: string): string {
   return createHash('sha256').update(readFileSync(path)).digest('hex')
@@ -51,64 +81,49 @@ function currentPlatform(): string {
 
 function checkPlatform(): CheckResult {
   const platform = currentPlatform()
-  const passed = SUPPORTED_PLATFORMS.has(platform)
+  const supported = SUPPORTED_PLATFORMS.has(platform)
 
-  return {
-    name: 'platform-support',
-    passed,
-    message: passed
-      ? `Platform ${platform} is supported`
-      : `Platform ${platform} is not supported (expected one of ${[...SUPPORTED_PLATFORMS].join(', ')})`,
-  }
+  return supported
+    ? ok('platform-support', `Platform ${platform} is supported`)
+    : fail(
+        'platform-support',
+        `Platform ${platform} is not supported (expected one of ${[...SUPPORTED_PLATFORMS].join(', ')})`,
+      )
 }
 
 function checkManifestExists(): CheckResult {
-  const passed = existsSync(MANIFEST_PATH)
-  return {
-    name: 'manifest-exists',
-    passed,
-    message: passed ? 'Manifest file exists' : `Manifest not found at ${MANIFEST_PATH}`,
-  }
+  return existsSync(MANIFEST_PATH)
+    ? ok('manifest-exists', 'Manifest file exists')
+    : fail('manifest-exists', `Manifest not found at ${MANIFEST_PATH}`)
 }
 
 function checkManifestShape(manifest: Manifest | null): CheckResult[] {
   if (!manifest) {
-    return [
-      {
-        name: 'manifest-shape',
-        passed: false,
-        message: 'Manifest could not be loaded',
-      },
-    ]
+    return [fail('manifest-shape', 'Manifest could not be loaded')]
   }
 
   const referenceFixtures = manifest.referenceFixtures ?? []
+  const schemaOk = manifest.schemaVersion === 1
+  const packagesOk = Array.isArray(manifest.packages) && manifest.packages.length === 0
+  const fixturesOk =
+    referenceFixtures.length === 1 && referenceFixtures[0]?.name === 'not-claude-code-emulator'
 
   return [
-    {
-      name: 'manifest-schema',
-      passed: manifest.schemaVersion === 1,
-      message:
-        manifest.schemaVersion === 1
-          ? 'Manifest schemaVersion is 1'
-          : `Manifest schemaVersion mismatch: ${manifest.schemaVersion}`,
-    },
-    {
-      name: 'manifest-packages-empty',
-      passed: Array.isArray(manifest.packages) && manifest.packages.length === 0,
-      message:
-        Array.isArray(manifest.packages) && manifest.packages.length === 0
-          ? 'Manifest packages array is empty'
-          : `Manifest packages must be empty (got ${manifest.packages?.length ?? 'invalid'})`,
-    },
-    {
-      name: 'reference-fixtures-only-emulator',
-      passed: referenceFixtures.length === 1 && referenceFixtures[0]?.name === 'not-claude-code-emulator',
-      message:
-        referenceFixtures.length === 1 && referenceFixtures[0]?.name === 'not-claude-code-emulator'
-          ? 'Manifest contains only the emulator reference fixture'
-          : `Unexpected reference fixture set: ${referenceFixtures.map((fixture) => fixture.name).join(', ') || '<none>'}`,
-    },
+    schemaOk
+      ? ok('manifest-schema', 'Manifest schemaVersion is 1')
+      : fail('manifest-schema', `Manifest schemaVersion mismatch: ${manifest.schemaVersion}`),
+    packagesOk
+      ? ok('manifest-packages-empty', 'Manifest packages array is empty')
+      : fail(
+          'manifest-packages-empty',
+          `Manifest packages must be empty (got ${manifest.packages?.length ?? 'invalid'})`,
+        ),
+    fixturesOk
+      ? ok('reference-fixtures-only-emulator', 'Manifest contains only the emulator reference fixture')
+      : fail(
+          'reference-fixtures-only-emulator',
+          `Unexpected reference fixture set: ${referenceFixtures.map((f) => f.name).join(', ') || '<none>'}`,
+        ),
   ]
 }
 
@@ -122,54 +137,97 @@ function checkPinnedFixture(manifest: Manifest | null): CheckResult[] {
   const fixture = (manifest.referenceFixtures ?? []).find((entry) => entry.name === expectedName)
 
   if (!fixture) {
-    return [
-      {
-        name: `reference-fixture:${expectedName}`,
-        passed: false,
-        message: `Reference fixture ${expectedName} not found`,
-      },
-    ]
+    return [fail(`reference-fixture:${expectedName}`, `Reference fixture ${expectedName} not found`)]
   }
 
   const results: CheckResult[] = [
-    {
-      name: `reference-fixture-sha:${expectedName}`,
-      passed: fixture.upstream.sha === expectedSha,
-      message:
-        fixture.upstream.sha === expectedSha
-          ? `Reference fixture is pinned to ${expectedSha}`
-          : `Reference fixture SHA mismatch: expected ${expectedSha}, got ${fixture.upstream.sha}`,
-    },
+    fixture.upstream.sha === expectedSha
+      ? ok(`reference-fixture-sha:${expectedName}`, `Reference fixture is pinned to ${expectedSha}`)
+      : fail(
+          `reference-fixture-sha:${expectedName}`,
+          `Reference fixture SHA mismatch: expected ${expectedSha}, got ${fixture.upstream.sha}`,
+        ),
   ]
 
   for (const file of fixture.files) {
     const fullPath = resolve(PROJECT_ROOT, file.fixturePath)
     const exists = existsSync(fullPath)
-    results.push({
-      name: `reference-fixture-exists:${file.upstreamPath}`,
-      passed: exists,
-      message: exists ? `Fixture exists: ${file.fixturePath}` : `Fixture missing: ${file.fixturePath}`,
-    })
+
+    results.push(
+      exists
+        ? ok(`reference-fixture-exists:${file.upstreamPath}`, `Fixture exists: ${file.fixturePath}`)
+        : fail(`reference-fixture-exists:${file.upstreamPath}`, `Fixture missing: ${file.fixturePath}`),
+    )
 
     if (!exists) {
       continue
     }
 
     const actualHash = sha256File(fullPath)
-    results.push({
-      name: `reference-fixture-hash:${file.upstreamPath}`,
-      passed: actualHash === file.sha256,
-      message:
-        actualHash === file.sha256
-          ? `Fixture hash matches for ${file.upstreamPath}`
-          : `Fixture hash mismatch for ${file.upstreamPath}: expected ${file.sha256}, got ${actualHash}`,
-    })
+    results.push(
+      actualHash === file.sha256
+        ? ok(`reference-fixture-hash:${file.upstreamPath}`, `Fixture hash matches for ${file.upstreamPath}`)
+        : fail(
+            `reference-fixture-hash:${file.upstreamPath}`,
+            `Fixture hash mismatch for ${file.upstreamPath}: expected ${file.sha256}, got ${actualHash}`,
+          ),
+    )
   }
 
   return results
 }
 
-function runAllChecks(): CheckResult[] {
+async function checkUpstreamArchived(packageName: string): Promise<CheckResult> {
+  const checkName = `upstream-archive-status:${packageName}`
+  const apiUrl = UPSTREAM_REPOS[packageName]
+
+  if (!apiUrl) {
+    return skip(checkName, `No upstream repo URL configured for ${packageName}`)
+  }
+
+  try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 8000)
+
+    let response: Response
+    try {
+      response = await fetch(apiUrl, {
+        headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'openclaw-cc-camouflage-canary/1' },
+        signal: controller.signal,
+      })
+    } finally {
+      clearTimeout(timeout)
+    }
+
+    if (response.status === 403 || response.status === 429) {
+      return skip(checkName, `GitHub API rate-limited (${response.status}); archive check skipped`)
+    }
+
+    if (!response.ok) {
+      return skip(checkName, `GitHub API returned ${response.status}; archive check skipped`)
+    }
+
+    const data = (await response.json()) as GitHubRepoResponse
+
+    if (data.archived === true) {
+      return warn(
+        checkName,
+        `Upstream repository '${packageName}' is archived. No future patches or security fixes expected. Existing installs are unaffected.`,
+      )
+    }
+
+    return ok(checkName, `Upstream repository '${packageName}' is active`)
+  } catch (err) {
+    const isNetwork =
+      err instanceof TypeError || (err instanceof DOMException && err.name === 'AbortError')
+    if (isNetwork) {
+      return skip(checkName, `Network unavailable or timed out; archive check skipped`)
+    }
+    return skip(checkName, `Archive check skipped: ${(err as Error).message}`)
+  }
+}
+
+async function runAllChecks(): Promise<CheckResult[]> {
   const results: CheckResult[] = [checkPlatform(), checkManifestExists()]
 
   let manifest: Manifest | null = null
@@ -181,31 +239,63 @@ function runAllChecks(): CheckResult[] {
 
   results.push(...checkManifestShape(manifest))
   results.push(...checkPinnedFixture(manifest))
+
+  const archiveChecks = await Promise.all(
+    Object.keys(UPSTREAM_REPOS).map((pkg) => checkUpstreamArchived(pkg)),
+  )
+  results.push(...archiveChecks)
+
   return results
 }
 
-function main(): number {
+function statusLabel(status: CheckStatus): string {
+  switch (status) {
+    case 'ok':
+      return 'OK  '
+    case 'fail':
+      return 'FAIL'
+    case 'warn':
+      return 'WARN'
+    case 'skip':
+      return 'SKIP'
+  }
+}
+
+async function main(): Promise<number> {
   console.log('openclaw-cc-camouflage compatibility canary')
   console.log('============================================')
 
-  const results = runAllChecks()
-  const failed = results.filter((result) => !result.passed)
+  const results = await runAllChecks()
+  const failed = results.filter((r) => r.status === 'fail')
+  const warned = results.filter((r) => r.status === 'warn')
+  const skipped = results.filter((r) => r.status === 'skip')
 
   for (const result of results) {
-    console.log(`${result.passed ? 'OK' : 'FAIL'} ${result.name}: ${result.message}`)
+    console.log(`${statusLabel(result.status)} ${result.name}: ${result.message}`)
   }
 
   console.log('--------------------------------------------')
   console.log(`results=${results.length}`)
   console.log(`failed=${failed.length}`)
+  if (warned.length > 0) {
+    console.log(`warnings=${warned.length}`)
+  }
+  if (skipped.length > 0) {
+    console.log(`skipped=${skipped.length}`)
+  }
 
   if (failed.length > 0) {
     console.log('compat_canary=fail')
     return 1
   }
 
-  console.log('compat_canary=ok')
+  if (warned.length > 0) {
+    console.log('compat_canary=ok_with_warnings')
+  } else {
+    console.log('compat_canary=ok')
+  }
+
   return 0
 }
 
-process.exit(main())
+main().then((code) => process.exit(code))

@@ -43,8 +43,22 @@ The canary performs these validations:
 4. **Upstream reference alignment** - Locked commits match expected values
 5. **Platform support** - Current platform is in the support matrix
 6. **Environment variables** - Required vars like `OC_CAMOUFLAGE_EMULATOR_ROOT` are set
+7. **Upstream archive status** - GitHub API check for repository archive state (reported as `WARN`, not `FAIL`)
 
 Note: Unlike the OpenCode variant, there are no peer plugin fixtures to check.
+
+### Archive check behaviour
+
+The canary queries the GitHub API to detect whether the upstream repository has
+been archived. An archived repository is reported as `WARN upstream-archived`
+but does **not** cause exit code 1. This is intentional: archive status is
+informational. An archived repository can still be cloned and installed; the
+emulator binary continues to work. The warning alerts operators that no upstream
+maintenance is expected going forward.
+
+If the GitHub API is unreachable (no network, rate-limited), the archive check
+is skipped with `SKIP upstream-archive-check: network unavailable` and the
+canary exits normally.
 
 ## Exit codes
 
