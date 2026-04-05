@@ -13,6 +13,14 @@
     "companion",
     "camouflage"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/codeg-dev/openclaw-cc-camouflage.git"
+  },
+  "homepage": "https://github.com/codeg-dev/openclaw-cc-camouflage#readme",
+  "bugs": {
+    "url": "https://github.com/codeg-dev/openclaw-cc-camouflage/issues"
+  },
   "publishConfig": {
     "access": "public"
   },
