@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "generatedForTask": "openclaw-cc-camouflage initial setup",
+  "packages": [],
+  "referenceFixtures": [
+    {
+      "name": "not-claude-code-emulator",
+      "upstream": {
+        "repo": "https://github.com/code-yeongyu/not-claude-code-emulator.git",
+        "sha": "5541e5c1cb0895cfd4390391dc642c74fc5d0a1a"
+      },
+      "files": [
+        {
+          "upstreamPath": "README.md",
+          "fixturePath": "fixtures/upstream/not-claude-code-emulator/5541e5c1cb0895cfd4390391dc642c74fc5d0a1a/README.md",
+          "sha256": "7dd1294b62021ff0be921c493094a96096217267b18d6052ed33136cb3f51264"
+        }
+      ],
+      "usage": "reference-only"
+    }
+  ]
+}
