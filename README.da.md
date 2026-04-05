@@ -25,41 +25,144 @@
 
 # openclaw-cc-camouflage
 
-Et ledsage-vedligeholdelsesplugin til OpenClaw, der hjælper med at verificere not-claude-code-emulator-status. Denne pakke er ikke en fork af upstream-projekter. Den leverer eksplicitte værktøjer uden automatiske hooks.
+Et ledsagende vedligeholdelsesplugin til OpenClaw, der verificerer at `not-claude-code-emulator` er til stede og sund.
 
-## Hvad dette er
+*Fordi den bedste operation starter med at bekræfte at dit dække er på plads.*
 
-`openclaw-cc-camouflage` er et vedligeholdelsesplugin, der:
+## Hvad dette gør
 
-- Verificerer emulator-tilstedeværelse og -sundhed før nogen operationer
-- Rapporterer status og leverer diagnostisk vejledning
-- Leverer stub-implementeringer til fremtidige patch-operationer
+`not-claude-code-emulator` er runtime'en, der oversætter OpenClaws API-kald til noget, som Anthropics infrastruktur genkender som kommer fra en Claude Code CLI-session — den slags der altid har været dækket af et standard Pro eller Max abonnement, uden ekstra forbrugsafgifter påkrævet. `openclaw-cc-camouflage` er forflyvningskontrollen, der bekræfter at oversætteren er til stede og operationel, før du har brug for den.
 
-Det anvender ikke automatisk patches under installation. Alle mutationer kræver eksplicit værktøjsinvokation.
+Navnet er ingen tilfældighed. Din trafik går ind og ser ud som én ting, ankommer og ser ud som en anden. Dette plugin verificerer at "garderoben" er klar.
 
-## Forudsætninger og installationsrækkefølge
+Konkret:
 
-Installationsrækkefølgen betyder noget. Du skal have følgende på plads, før dette plugin kan fungere:
+- **Registrerer** `not-claude-code-emulator` via tre opdagelsesstier (miljøvariabel → npm global → fallback-stier)
+- **Rapporterer** maskinlæsbar status: `emulator=present|missing|unreachable`, `patch=none`, `support=supported|unsupported`
+- **Diagnosticerer** problemer med handlingsrettede næste trin, når noget er galt
+- **Reserverer** `patch_apply` / `patch_revert` som eksplicitte stubs til fremtidige operationer
 
-1. **`not-claude-code-emulator`** (commit `5541e5c`)
-   - Meddelelses-runtime, der leverer Anthropic-kompatible grænseflader
-   - Installer via npm: `npm install -g not-claude-code-emulator`
-   - Eller klon ind i `~/github/not-claude-code-emulator`
+Intet muterer automatisk. Hooks er kun til verifikation. Du kører `status`, får rapporten og beslutter hvad du gør næste gang.
 
-2. **`openclaw-cc-camouflage`** (denne pakke)
-   - Installer sidst, efter emulator er til stede
+## Installation
 
-Konfigurer miljøvariablen:
+Installer i rækkefølge. Hvert trin afhænger af det foregående.
+
+### Trin 1: Installer OpenClaw
+
+Hvis ikke allerede installeret:
 
 ```bash
+npm install -g openclaw
+```
+
+### Trin 2: Installer `not-claude-code-emulator`
+
+Dette er komponenten, der får din OpenClaw-trafik til at tale flydende Claude Code CLI. Uden den er der intet for dette plugin at verificere — og intet der står mellem dine API-kald og en ekstra-forbrugslinje.
+
+```bash
+# Mulighed A: npm global (anbefalet)
+npm install -g not-claude-code-emulator
+
+# Mulighed B: fastgør til det eksakte understøttede commit (5541e5c)
+cd ~/github
+git clone https://github.com/code-yeongyu/not-claude-code-emulator.git
+cd not-claude-code-emulator
+git checkout 5541e5c1cb0895cfd4390391dc642c74fc5d0a1a
+```
+
+### Trin 3: Installer `openclaw-cc-camouflage`
+
+```bash
+# Mulighed A: npm global (publiceret pakke)
+npm install -g openclaw-cc-camouflage
+
+# Mulighed B: fra kilde
+cd ~/github
+git clone https://github.com/codeg-dev/openclaw-cc-camouflage.git
+cd openclaw-cc-camouflage
+bun install
+```
+
+### Trin 4: Konfigurer emulatorstien
+
+Fortæl plugin'et hvor det kan finde `not-claude-code-emulator`:
+
+```bash
+# Hvis du brugte npm global installation:
+export OC_CAMOUFLAGE_EMULATOR_ROOT="$(npm root -g)/not-claude-code-emulator"
+
+# Hvis du klonede manuelt:
 export OC_CAMOUFLAGE_EMULATOR_ROOT="$HOME/github/not-claude-code-emulator"
 ```
 
-Eller brug fallback-stier:
+Tilføj til din shell-profil for persistens:
+
+```bash
+# ~/.zshrc eller ~/.bashrc
+echo 'export OC_CAMOUFLAGE_EMULATOR_ROOT="$(npm root -g)/not-claude-code-emulator"' >> ~/.zshrc
+```
+
+Valgfrit — konfigurer yderligere fallback-søgestier (kolon-separeret på macOS/Linux, semikolon på Windows):
 
 ```bash
 export OC_CAMOUFLAGE_EMULATOR_FALLBACK_PATHS="/opt/emulator:$HOME/.local/share/emulator"
 ```
+
+### Trin 5: Registrer plugin'et i OpenClaw
+
+Tilføj til din `openclaw.json` eller `openclaw.jsonc`:
+
+```json
+{
+  "plugins": ["openclaw-cc-camouflage"]
+}
+```
+
+Hvis du installerede fra kilde, brug den lokale sti:
+
+```json
+{
+  "plugins": [
+    {
+      "name": "openclaw-cc-camouflage",
+      "path": "~/github/openclaw-cc-camouflage"
+    }
+  ]
+}
+```
+
+### Trin 6: Verificer installationen
+
+```bash
+bun run status
+```
+
+En sund installation rapporterer:
+
+```
+emulator=present
+patch=none
+support=supported
+```
+
+Exit-kode 0 betyder at alt er i orden. Exit-kode 1 betyder at noget kræver opmærksomhed.
+
+For et mere detaljeret billede:
+
+```bash
+bun run doctor
+# emulator=present
+# patch=none
+# support=supported
+# doctor=healthy
+#
+# Vedligeholdelsesstatus er sund.
+# next: Emulatorforudsætningen er læsbar og den aktuelle platform understøttes.
+# next: Alle værktøjer er tilgængelige.
+```
+
+Hvis du ser `emulator=missing`, verificer at `OC_CAMOUFLAGE_EMULATOR_ROOT` peger på et bibliotek, der indeholder `not-claude-code-emulator`s `package.json`.
 
 ## Tilgængelige værktøjer
 
@@ -67,7 +170,7 @@ Dette plugin eksponerer fire eksplicitte værktøjer. De er ikke automatiske hoo
 
 ### `status`
 
-Rapporterer den aktuelle tilstand af emulator-installationen.
+Rapporterer den aktuelle tilstand af emulatorinstallationen.
 
 ```bash
 bun run status
@@ -77,78 +180,79 @@ Outputformatet er maskinlæsbart:
 
 ```
 emulator=present
-emulator_version=5541e5c
-emulator_path=/Users/you/github/not-claude-code-emulator
-install_mode=local-folder
+patch=none
 support=supported
 ```
 
-Afslutningskode 0 betyder sund. Afslutningskode 1 betyder, at noget kræver opmærksomhed.
+Exit-kode 0 betyder sund. Exit-kode 1 betyder at noget kræver opmærksomhed.
 
 ### `doctor`
 
-Leverer diagnostisk vejledning baseret på den aktuelle tilstand.
+Giver diagnostisk vejledning baseret på den aktuelle tilstand.
 
 ```bash
 bun run doctor
 ```
 
-Dette inspicerer filer og rapporterer handlingssvarende næste trin. Det installerer, patcher eller modificerer ikke noget. Det læser kun og rapporterer.
+Inspektionerer filer og rapporterer handlingsrettede næste trin. Installerer ikke, patcher eller modificerer noget. Læser og rapporterer kun.
 
 ### `patch_apply`
 
-Anvender patches til målet (i øjeblikket en stub til fremtidig udvidelse).
+Anvender patches på målet (i øjeblikket en stub til fremtidig udvidelse).
 
 ```bash
 bun run patch:apply
 ```
 
-I den aktuelle version validerer dette miljøet, men modificerer ikke nogen peer-tilstand. Fremtidige versioner kan implementere faktisk patching med rollback-markører.
+I den nuværende version validerer dette miljøet, men modificerer ikke nogen peer-tilstand. Fremtidige versioner kan implementere faktisk patching med rollback-markører.
 
 ### `patch_revert`
 
-Tilbagefører tidligere anvendte patches (i øjeblikket en stub til fremtidig udvidelse).
+Fortryder tidligere anvendte patches (i øjeblikket en stub til fremtidig udvidelse).
 
 ```bash
 bun run patch:revert
 ```
 
-I den aktuelle version validerer dette miljøet, men modificerer ikke nogen peer-tilstand. Fremtidige versioner kan implementere faktisk tilbageførsel ved hjælp af rollback-markører.
+I den nuværende version validerer dette miljøet, men modificerer ikke nogen peer-tilstand.
 
-## Hvorfor automatiske hooks kun er verifikation
+## Hvorfor automatiske hooks kun er til verifikation
 
-Automatiske hooks i dette plugin er begrænset til kun verifikation og metadata. De anvender ikke automatisk patches, fordi:
+Automatiske hooks i dette plugin er begrænset til kun verifikation og metadata. De anvender ikke patches automatisk, fordi:
 
-1. At mutere en peer uden eksplicit brugerhensigt overtræder princippet om mindste overraskelse
-2. Patch-fejl har brug for menneskelig gennemgang, ikke stille forsøg igen
-3. Tilbageførsel kræver eksplicit samtykke til at gendanne tilstand
+1. At mutere en peer uden eksplicit brugerintention krænker princippet om mindst mulig overraskelse
+2. Patching-fejl har brug for menneskelig gennemgang, ikke tavse genforsøg
+3. Rollback kræver eksplicit samtykke for at gendanne tilstand
 
-Hooks advarer, når der registreres afdrift. Du beslutter, om du vil anvende, tilbageføre eller lade miljøet være uændret.
+Hooks advarer når drift registreres. Du beslutter om du vil anvende, fortryde eller lade miljøet være uændret.
 
-## Platformsunderstøttelse
+Plugin'et verificerer parathed. Hvad du gør med en ordentligt vedligeholdt opsætning er mellem dig og dit abonnement.
+
+## Platformunderstøttelse
 
 | Platform | Status | Noter |
 |----------|--------|-------|
-| macOS    | Understøttet | Primært desktop-miljø |
-| Linux    | Understøttet | Samme pinned upstream fixtures |
-| Windows  | Understøttet | Understøtter drevbogstav- og backslash-baseret plugin-opdagelse |
+| macOS | Understøttet | Primært desktop-miljø |
+| Linux | Understøttet | Samme fastgjorte upstream fixtures |
+| Windows | Understøttet | Understøtter drevbogstav- og backslash-baseret plugin-opdagelse |
 
-## Kompatibilitetskanariefugl
+## Kompatibilitets-kanariefugl
 
-For at tjekke upstream-afdrift mod pinned mål:
+For at tjekke for upstream drift mod fastgjorte mål:
 
 ```bash
 bun run compat:canary
 ```
 
-Dette er en skrivebeskyttet kontrol, der validerer fixture-integritet og upstream-referencer uden at modificere noget. Den afslutter med 0 på pinned understøttede mål.
+Kun-læsning check. Validerer fixture-integritet og upstream referencer uden at modificere noget. Exiter med 0 på fastgjorte understøttede mål.
 
 ## Dokumentation
 
-- `docs/install.md` - Forudsætninger og installations-trin
+- `docs/install.md` - Forudsætninger og installationstrin
 - `docs/compatibility.md` - Kompatibilitetsgrænser
 - `docs/support-matrix.md` - Låste fixture-versioner
-- `docs/non-goals.md` - Eksplicitte udenfor-scope-elementer
+- `docs/non-goals.md` - Eksplicitte udenfor-scope elementer
+- `docs/rollback.md` - Emulatorgendannelsesprocedurer
 
 ## Udvikling
 
@@ -174,4 +278,4 @@ bun run check:publish-safety
 
 MIT
 
-<!-- i18n:source-hash:5f30ef48aef04d659e3bd2e705b8b9250abb30ea042f84797e5d8997182de1af -->
+<!-- i18n:source-hash:a56b7af1f4a33a4d0553898a6602fee41a701faaa9cfdc5f4e759407ff545b7d -->

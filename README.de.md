@@ -25,41 +25,144 @@
 
 # openclaw-cc-camouflage
 
-Ein begleitendes Wartungsplugin für OpenClaw, das bei der Überprüfung des not-claude-code-emulator-Status hilft. Dieses Paket ist kein Fork von Upstream-Projekten. Es bietet explizite Tools ohne automatische Hooks.
+Ein begleitendes Wartungs-Plugin für OpenClaw, das überprüft, ob `not-claude-code-emulator` vorhanden und funktionsfähig ist.
 
-## Was das ist
+*Denn die beste Operation beginnt damit, zu bestätigen, dass Ihre Tarnung einsatzbereit ist.*
 
-`openclaw-cc-camouflage` ist ein Wartungsplugin, das:
+## Was dies tut
 
-- Vor allen Operationen die Emulator-Präsenz und -Gesundheit überprüft
-- Status meldet und diagnostische Anleitung bietet
-- Stub-Implementierungen für zukünftige Patch-Operationen bereitstellt
+`not-claude-code-emulator` ist die Laufzeitumgebung, die OpenClaws API-Aufrufe in etwas übersetzt, das Anthropics Infrastruktur als von einer Claude Code CLI-Sitzung kommend erkennt — die Art, die schon immer von einem Standard-Pro- oder Max-Abonnement abgedeckt wurde, ohne zusätzliche Nutzungsgebühren. `openclaw-cc-camouflage` ist die Vorflugkontrolle, die bestätigt, dass der Übersetzer vorhanden und betriebsbereit ist, bevor Sie ihn brauchen.
 
-Es wendet während der Installation nicht automatisch Patches an. Alle Mutationen erfordern einen expliziten Tool-Aufruf.
+Der Name ist kein Zufall. Ihr Traffic geht als eine Sache hinein, kommt als eine andere an. Dieses Plugin überprüft, ob der "Kleiderschrank" bereit ist.
 
-## Voraussetzungen und Installationsreihenfolge
+Konkret:
 
-Die Installationsreihenfolge ist wichtig. Sie müssen Folgendes vorhanden haben, bevor dieses Plugin funktionieren kann:
+- **Erkennt** `not-claude-code-emulator` über drei Erkennungspfade (Umgebungsvariable → npm global → Fallback-Pfade)
+- **Meldet** maschinenlesbaren Status: `emulator=present|missing|unreachable`, `patch=none`, `support=supported|unsupported`
+- **Diagnostiziert** Probleme mit umsetzbaren nächsten Schritten, wenn etwas nicht stimmt
+- **Reserviert** `patch_apply` / `patch_revert` als explizite Stubs für zukünftige Operationen
 
-1. **`not-claude-code-emulator`** (Commit `5541e5c`)
-   - Die Nachrichten-Runtime, die Anthropic-kompatible Schnittstellen bereitstellt
-   - Installation via npm: `npm install -g not-claude-code-emulator`
-   - Oder klonen Sie in `~/github/not-claude-code-emulator`
+Nichts mutiert automatisch. Die Hooks sind nur zur Überprüfung. Sie führen `status` aus, erhalten den Bericht und entscheiden, was als Nächstes zu tun ist.
 
-2. **`openclaw-cc-camouflage`** (dieses Paket)
-   - Zuletzt installieren, nachdem der Emulator vorhanden ist
+## Installation
 
-Konfigurieren Sie die Umgebungsvariable:
+Installieren Sie in Reihenfolge. Jeder Schritt hängt vom vorherigen ab.
+
+### Schritt 1: OpenClaw installieren
+
+Falls noch nicht installiert:
 
 ```bash
+npm install -g openclaw
+```
+
+### Schritt 2: `not-claude-code-emulator` installieren
+
+Dies ist die Komponente, die Ihren OpenClaw-Traffic fließend Claude Code CLI sprechen lässt. Ohne sie gibt es nichts, das dieses Plugin überprüfen könnte — und nichts, das zwischen Ihren API-Aufrufen und einem zusätzlichen Nutzungsposten steht.
+
+```bash
+# Option A: npm global (empfohlen)
+npm install -g not-claude-code-emulator
+
+# Option B: Auf den genauen unterstützten Commit pinnen (5541e5c)
+cd ~/github
+git clone https://github.com/code-yeongyu/not-claude-code-emulator.git
+cd not-claude-code-emulator
+git checkout 5541e5c1cb0895cfd4390391dc642c74fc5d0a1a
+```
+
+### Schritt 3: `openclaw-cc-camouflage` installieren
+
+```bash
+# Option A: npm global (veröffentlichtes Paket)
+npm install -g openclaw-cc-camouflage
+
+# Option B: Aus Quelle
+cd ~/github
+git clone https://github.com/codeg-dev/openclaw-cc-camouflage.git
+cd openclaw-cc-camouflage
+bun install
+```
+
+### Schritt 4: Den Emulator-Pfad konfigurieren
+
+Sagen Sie dem Plugin, wo es `not-claude-code-emulator` finden kann:
+
+```bash
+# Wenn Sie npm global installiert haben:
+export OC_CAMOUFLAGE_EMULATOR_ROOT="$(npm root -g)/not-claude-code-emulator"
+
+# Wenn Sie manuell geklont haben:
 export OC_CAMOUFLAGE_EMULATOR_ROOT="$HOME/github/not-claude-code-emulator"
 ```
 
-Oder verwenden Sie Fallback-Pfade:
+Fügen Sie es Ihrem Shell-Profil für Persistenz hinzu:
+
+```bash
+# ~/.zshrc oder ~/.bashrc
+echo 'export OC_CAMOUFLAGE_EMULATOR_ROOT="$(npm root -g)/not-claude-code-emulator"' >> ~/.zshrc
+```
+
+Optional — konfigurieren Sie zusätzliche Fallback-Suchpfade (durch Doppelpunkt getrennt auf macOS/Linux, Semikolon auf Windows):
 
 ```bash
 export OC_CAMOUFLAGE_EMULATOR_FALLBACK_PATHS="/opt/emulator:$HOME/.local/share/emulator"
 ```
+
+### Schritt 5: Das Plugin in OpenClaw registrieren
+
+Fügen Sie es Ihrer `openclaw.json` oder `openclaw.jsonc` hinzu:
+
+```json
+{
+  "plugins": ["openclaw-cc-camouflage"]
+}
+```
+
+Wenn Sie aus der Quelle installiert haben, verwenden Sie den lokalen Pfad:
+
+```json
+{
+  "plugins": [
+    {
+      "name": "openclaw-cc-camouflage",
+      "path": "~/github/openclaw-cc-camouflage"
+    }
+  ]
+}
+```
+
+### Schritt 6: Die Installation überprüfen
+
+```bash
+bun run status
+```
+
+Eine funktionsfähige Installation meldet:
+
+```
+emulator=present
+patch=none
+support=supported
+```
+
+Exit-Code 0 bedeutet, dass alles in Ordnung ist. Exit-Code 1 bedeutet, dass etwas Aufmerksamkeit erfordert.
+
+Für ein detaillierteres Bild:
+
+```bash
+bun run doctor
+# emulator=present
+# patch=none
+# support=supported
+# doctor=healthy
+#
+# Der Wartungsstatus ist funktionsfähig.
+# next: Die Emulator-Voraussetzung ist lesbar und die aktuelle Plattform wird unterstützt.
+# next: Alle Tools sind verfügbar.
+```
+
+Wenn Sie `emulator=missing` sehen, überprüfen Sie, ob `OC_CAMOUFLAGE_EMULATOR_ROOT` auf ein Verzeichnis zeigt, das die `package.json` von `not-claude-code-emulator` enthält.
 
 ## Verfügbare Tools
 
@@ -77,23 +180,21 @@ Das Ausgabeformat ist maschinenlesbar:
 
 ```
 emulator=present
-emulator_version=5541e5c
-emulator_path=/Users/you/github/not-claude-code-emulator
-install_mode=local-folder
+patch=none
 support=supported
 ```
 
-Exit-Code 0 bedeutet gesund. Exit-Code 1 bedeutet, dass etwas Aufmerksamkeit benötigt.
+Exit-Code 0 bedeutet funktionsfähig. Exit-Code 1 bedeutet, dass etwas Aufmerksamkeit erfordert.
 
 ### `doctor`
 
-Bietet diagnostische Anleitung basierend auf dem aktuellen Zustand.
+Bietet diagnostische Anleitungen basierend auf dem aktuellen Zustand.
 
 ```bash
 bun run doctor
 ```
 
-Dies untersucht Dateien und meldet umsetzbare nächste Schritte. Es installiert, patcht oder modifiziert nichts. Es liest nur und meldet.
+Überprüft Dateien und meldet umsetzbare nächste Schritte. Installiert, patcht oder modifiziert nichts. Liest und meldet nur.
 
 ### `patch_apply`
 
@@ -103,7 +204,7 @@ Wendet Patches auf das Ziel an (derzeit ein Stub für zukünftige Erweiterung).
 bun run patch:apply
 ```
 
-In der aktuellen Version validiert dies die Umgebung, modifiziert aber keinen Peer-Status. Zukünftige Versionen können tatsächliches Patching mit Rollback-Markern implementieren.
+In der aktuellen Version validiert dies die Umgebung, modifiziert aber keinen Peer-Status. Zukünftige Versionen könnten tatsächliches Patching mit Rollback-Markern implementieren.
 
 ### `patch_revert`
 
@@ -113,42 +214,45 @@ Macht zuvor angewendete Patches rückgängig (derzeit ein Stub für zukünftige 
 bun run patch:revert
 ```
 
-In der aktuellen Version validiert dies die Umgebung, modifiziert aber keinen Peer-Status. Zukünftige Versionen können tatsächliche Rückgängig-Machung unter Verwendung von Rollback-Markern implementieren.
+In der aktuellen Version validiert dies die Umgebung, modifiziert aber keinen Peer-Status.
 
-## Warum automatische Hooks nur Überprüfung sind
+## Warum automatische Hooks nur zur Überprüfung sind
 
 Automatische Hooks in diesem Plugin sind auf Überprüfung und Metadaten beschränkt. Sie wenden keine Patches automatisch an, weil:
 
 1. Das Mutieren eines Peers ohne explizite Benutzerabsicht das Prinzip der geringsten Überraschung verletzt
-2. Patch-Fehler benötigen menschliche Überprüfung, keine stillen Wiederholungsversuche
+2. Patching-Fehler benötigen menschliche Überprüfung, keine stillen Wiederholungsversuche
 3. Rollback erfordert explizite Zustimmung zur Wiederherstellung des Zustands
 
-Die Hooks warnen, wenn Drift erkannt wird. Sie entscheiden, ob Sie anwenden, zurücksetzen oder die Umgebung unverändert lassen.
+Die Hooks warnen, wenn Drift erkannt wird. Sie entscheiden, ob Sie anwenden, rückgängig machen oder die Umgebung unverändert lassen.
+
+Das Plugin überprüft die Bereitschaft. Was Sie mit einer ordnungsgemäß gewarteten Einrichtung tun, liegt zwischen Ihnen und Ihrem Abonnement.
 
 ## Plattformunterstützung
 
 | Plattform | Status | Hinweise |
-|----------|--------|-------|
-| macOS    | Unterstützt | Primäre Desktop-Umgebung |
-| Linux    | Unterstützt | Gleiche gepinnte Upstream-Fixtures |
-| Windows  | Unterstützt | Unterstützt laufwerksbuchstaben- und backslash-basierte Plugin-Erkennung |
+|-----------|--------|----------|
+| macOS | Unterstützt | Primäre Desktop-Umgebung |
+| Linux | Unterstützt | Gleiche gepinnte Upstream-Fixtures |
+| Windows | Unterstützt | Unterstützt laufwerksbuchstaben- und rückwärtsstrichbasierte Plugin-Erkennung |
 
-## Kompatibilitätskanarienvogel
+## Kompatibilitäts-Kanarienvogel
 
-Um Upstream-Drift gegen gepinnte Ziele zu prüfen:
+Um auf Upstream-Drift gegen gepinnte Ziele zu prüfen:
 
 ```bash
 bun run compat:canary
 ```
 
-Dies ist ein schreibgeschützter Check, der Fixture-Integrität und Upstream-Referenzen validiert, ohne etwas zu modifizieren. Er beendet mit 0 bei gepinnten unterstützten Zielen.
+Nur-Lesen-Prüfung. Validiert Fixture-Integrität und Upstream-Referenzen ohne etwas zu modifizieren. Beendet mit 0 auf gepinnten unterstützten Zielen.
 
 ## Dokumentation
 
 - `docs/install.md` - Voraussetzungen und Installationsschritte
 - `docs/compatibility.md` - Kompatibilitätsgrenzen
 - `docs/support-matrix.md` - Gesperrte Fixture-Versionen
-- `docs/non-goals.md` - Explizite außerhalb des Bereichs liegende Elemente
+- `docs/non-goals.md` - Explizite Out-of-Scope-Elemente
+- `docs/rollback.md` - Emulator-Wiederherstellungsverfahren
 
 ## Entwicklung
 
@@ -163,7 +267,7 @@ bun run typecheck
 bun run test:unit
 bun run test:integration
 
-# Patches gegen Fixtures verifizieren
+# Patches gegen Fixtures überprüfen
 bun run verify:patches
 
 # Veröffentlichungssicherheit prüfen
@@ -174,4 +278,4 @@ bun run check:publish-safety
 
 MIT
 
-<!-- i18n:source-hash:5f30ef48aef04d659e3bd2e705b8b9250abb30ea042f84797e5d8997182de1af -->
+<!-- i18n:source-hash:a56b7af1f4a33a4d0553898a6602fee41a701faaa9cfdc5f4e759407ff545b7d -->

@@ -25,41 +25,144 @@
 
 # openclaw-cc-camouflage
 
-Un plugin complementare di manutenzione per OpenClaw che aiuta a verificare lo stato di not-claude-code-emulator. Questo pacchetto non è un fork di progetti upstream. Fornisce strumenti espliciti senza hook automatici.
+Un plugin di manutenzione companion per OpenClaw che verifica che `not-claude-code-emulator` sia presente e in salute.
 
-## Cos'è questo
+*Perché la migliore operazione inizia confermando che la tua copertura è al suo posto.*
 
-`openclaw-cc-camouflage` è un plugin di manutenzione che:
+## Cosa fa questo
 
-- Verifica la presenza e la salute dell'emulatore prima di qualsiasi operazione
-- Segnala lo stato e fornisce indicazioni diagnostiche
-- Fornisce implementazioni stub per operazioni di patch future
+`not-claude-code-emulator` è il runtime che traduce le chiamate API di OpenClaw in qualcosa che l'infrastruttura di Anthropic riconosce come proveniente da una sessione Claude Code CLI — il tipo che è sempre stata coperta da un abbonamento standard Pro o Max, senza costi extra di utilizzo richiesti. `openclaw-cc-camouflage` è il controllo pre-volo che conferma che il traduttore è presente e operativo prima che ne abbia bisogno.
 
-Non applica automaticamente patch durante l'installazione. Tutte le mutazioni richiedono l'invocazione esplicita dello strumento.
+Il nome non è una coincidenza. Il tuo traffico entra sembrando una cosa, arriva sembrando un'altra. Questo plugin verifica che il "guardaroba" sia pronto.
 
-## Prerequisiti e ordine di installazione
+Concretamente:
 
-L'ordine di installazione è importante. Devi avere quanto segue in posizione prima che questo plugin possa funzionare:
+- **Rileva** `not-claude-code-emulator` tramite tre percorsi di scoperta (variabile d'ambiente → npm global → percorsi di fallback)
+- **Riporta** stato leggibile dalla macchina: `emulator=present|missing|unreachable`, `patch=none`, `support=supported|unsupported`
+- **Diagnostica** problemi con passaggi successivi attuabili quando qualcosa va storto
+- **Riserva** `patch_apply` / `patch_revert` come stub espliciti per operazioni future
 
-1. **`not-claude-code-emulator`** (commit `5541e5c`)
-   - Il runtime di messaggi che fornisce interfacce compatibili con Anthropic
-   - Installa via npm: `npm install -g not-claude-code-emulator`
-   - O clona in `~/github/not-claude-code-emulator`
+Nulla muta automaticamente. Gli hook sono solo per verifica. Esegui `status`, ottieni il rapporto e decidi cosa fare dopo.
 
-2. **`openclaw-cc-camouflage`** (questo pacchetto)
-   - Installa per ultimo, dopo che l'emulatore è presente
+## Installazione
 
-Configura la variabile d'ambiente:
+Installa in ordine. Ogni passaggio dipende dal precedente.
+
+### Passo 1: Installa OpenClaw
+
+Se non è già installato:
 
 ```bash
+npm install -g openclaw
+```
+
+### Passo 2: Installa `not-claude-code-emulator`
+
+Questo è il componente che fa parlare fluentemente il tuo traffico OpenClaw in CLI di Claude Code. Senza di esso, non c'è nulla che questo plugin possa verificare — e nulla tra le tue chiamate API e una voce di utilizzo extra.
+
+```bash
+# Opzione A: npm global (consigliato)
+npm install -g not-claude-code-emulator
+
+# Opzione B: fissa al commit supportato esatto (5541e5c)
+cd ~/github
+git clone https://github.com/code-yeongyu/not-claude-code-emulator.git
+cd not-claude-code-emulator
+git checkout 5541e5c1cb0895cfd4390391dc642c74fc5d0a1a
+```
+
+### Passo 3: Installa `openclaw-cc-camouflage`
+
+```bash
+# Opzione A: npm global (pacchetto pubblicato)
+npm install -g openclaw-cc-camouflage
+
+# Opzione B: dal codice sorgente
+cd ~/github
+git clone https://github.com/codeg-dev/openclaw-cc-camouflage.git
+cd openclaw-cc-camouflage
+bun install
+```
+
+### Passo 4: Configura il percorso dell'emulatore
+
+Di' al plugin dove trovare `not-claude-code-emulator`:
+
+```bash
+# Se hai usato l'installazione npm global:
+export OC_CAMOUFLAGE_EMULATOR_ROOT="$(npm root -g)/not-claude-code-emulator"
+
+# Se hai clonato manualmente:
 export OC_CAMOUFLAGE_EMULATOR_ROOT="$HOME/github/not-claude-code-emulator"
 ```
 
-O usa percorsi di fallback:
+Aggiungi al tuo profilo shell per la persistenza:
+
+```bash
+# ~/.zshrc o ~/.bashrc
+echo 'export OC_CAMOUFLAGE_EMULATOR_ROOT="$(npm root -g)/not-claude-code-emulator"' >> ~/.zshrc
+```
+
+Opzionale — configura percorsi di ricerca di fallback aggiuntivi (separati da due punti su macOS/Linux, punto e virgola su Windows):
 
 ```bash
 export OC_CAMOUFLAGE_EMULATOR_FALLBACK_PATHS="/opt/emulator:$HOME/.local/share/emulator"
 ```
+
+### Passo 5: Registra il plugin in OpenClaw
+
+Aggiungi al tuo `openclaw.json` o `openclaw.jsonc`:
+
+```json
+{
+  "plugins": ["openclaw-cc-camouflage"]
+}
+```
+
+Se hai installato dal codice sorgente, usa il percorso locale:
+
+```json
+{
+  "plugins": [
+    {
+      "name": "openclaw-cc-camouflage",
+      "path": "~/github/openclaw-cc-camouflage"
+    }
+  ]
+}
+```
+
+### Passo 6: Verifica l'installazione
+
+```bash
+bun run status
+```
+
+Un'installazione sana riporta:
+
+```
+emulator=present
+patch=none
+support=supported
+```
+
+Il codice di uscita 0 significa che tutto è in ordine. Il codice di uscita 1 significa che qualcosa richiede attenzione.
+
+Per un'immagine più dettagliata:
+
+```bash
+bun run doctor
+# emulator=present
+# patch=none
+# support=supported
+# doctor=healthy
+#
+# Lo stato di manutenzione è sano.
+# next: Il prerequisito dell'emulatore è leggibile e la piattaforma corrente è supportata.
+# next: Tutti gli strumenti sono disponibili.
+```
+
+Se vedi `emulator=missing`, verifica che `OC_CAMOUFLAGE_EMULATOR_ROOT` punti a una directory contenente il `package.json` di `not-claude-code-emulator`.
 
 ## Strumenti disponibili
 
@@ -67,7 +170,7 @@ Questo plugin espone quattro strumenti espliciti. Non sono hook automatici.
 
 ### `status`
 
-Segnala lo stato attuale dell'installazione dell'emulatore.
+Riporta lo stato attuale dell'installazione dell'emulatore.
 
 ```bash
 bun run status
@@ -77,23 +180,21 @@ Il formato di output è leggibile dalla macchina:
 
 ```
 emulator=present
-emulator_version=5541e5c
-emulator_path=/Users/you/github/not-claude-code-emulator
-install_mode=local-folder
+patch=none
 support=supported
 ```
 
-Il codice di uscita 0 significa sano. Il codice di uscita 1 significa che qualcosa necessita attenzione.
+Il codice di uscita 0 significa sano. Il codice di uscita 1 significa che qualcosa richiede attenzione.
 
 ### `doctor`
 
-Fornisce indicazioni diagnostiche basate sullo stato attuale.
+Fornisce orientamento diagnostico basato sullo stato attuale.
 
 ```bash
 bun run doctor
 ```
 
-Questo ispeziona i file e segnala i passaggi successivi actionable. Non installa, patch o modifica nulla. Legge e segnala solo.
+Ispeziona i file e riporta passaggi successivi attuabili. Non installa, non patcha, non modifica nulla. Solo legge e riporta.
 
 ### `patch_apply`
 
@@ -103,7 +204,7 @@ Applica patch al target (attualmente uno stub per estensione futura).
 bun run patch:apply
 ```
 
-Nella versione attuale, questo convalida l'ambiente ma non modifica alcuno stato peer. Le versioni future potrebbero implementare patching reale con marker di rollback.
+Nella versione corrente, questo valida l'ambiente ma non modifica alcuno stato peer. Le versioni future possono implementare patching reale con marker di rollback.
 
 ### `patch_revert`
 
@@ -113,11 +214,11 @@ Ripristina patch precedentemente applicate (attualmente uno stub per estensione 
 bun run patch:revert
 ```
 
-Nella versione attuale, questo convalida l'ambiente ma non modifica alcuno stato peer. Le versioni future potrebbero implementare ripristino reale utilizzando marker di rollback.
+Nella versione corrente, questo valida l'ambiente ma non modifica alcuno stato peer.
 
-## Perché gli hook automatici sono solo di verifica
+## Perché gli hook automatici sono solo per verifica
 
-Gli hook automatici in questo plugin sono limitati a verifica e metadati solo. Non applicano automaticamente patch perché:
+Gli hook automatici in questo plugin sono limitati solo a verifica e metadati. Non applicano patch automaticamente perché:
 
 1. Mutare un peer senza intenzione esplicita dell'utente viola il principio della minima sorpresa
 2. I fallimenti di patching necessitano di revisione umana, non di tentativi silenziosi
@@ -125,48 +226,51 @@ Gli hook automatici in questo plugin sono limitati a verifica e metadati solo. N
 
 Gli hook avvertono quando viene rilevata deriva. Tu decidi se applicare, ripristinare o lasciare l'ambiente invariato.
 
+Il plugin verifica la prontezza. Cosa fai con una configurazione correttamente mantenuta è tra te e il tuo piano di abbonamento.
+
 ## Supporto piattaforma
 
 | Piattaforma | Stato | Note |
-|----------|--------|-------|
-| macOS    | Supportato | Ambiente desktop primario |
-| Linux    | Supportato | Stessi fixture upstream fissati |
-| Windows  | Supportato | Supporta il rilevamento plugin basato su lettera unità e backslash |
+|-------------|-------|------|
+| macOS | Supportato | Ambiente desktop principale |
+| Linux | Supportato | Stessi fixtures upstream fissati |
+| Windows | Supportato | Supporta il rilevamento dei plugin basato su lettera di unità e backslash |
 
 ## Canarino di compatibilità
 
-Per controllare la deriva upstream rispetto ai target fissati:
+Per verificare la deriva upstream rispetto ai target fissati:
 
 ```bash
 bun run compat:canary
 ```
 
-Questo è un controllo di sola lettura che convalida l'integrità dei fixture e i riferimenti upstream senza modificare nulla. Esce con 0 su target fissati supportati.
+Controllo di sola lettura. Valida l'integrità dei fixtures e i riferimenti upstream senza modificare nulla. Esce con 0 sui target supportati fissati.
 
 ## Documentazione
 
 - `docs/install.md` - Prerequisiti e passaggi di installazione
 - `docs/compatibility.md` - Limiti di compatibilità
-- `docs/support-matrix.md` - Versioni di fixture bloccate
-- `docs/non-goals.md` - Elementi esplicitamente fuori scope
+- `docs/support-matrix.md` - Versioni dei fixtures bloccate
+- `docs/non-goals.md` - Elementi esplicitamente fuori dallo scope
+- `docs/rollback.md` - Procedure di recupero dell'emulatore
 
 ## Sviluppo
 
 ```bash
-# Installa dipendenze
+# Installa le dipendenze
 bun install
 
-# Controllo tipi
+# Type check
 bun run typecheck
 
-# Esegui test
+# Esegui i test
 bun run test:unit
 bun run test:integration
 
-# Verifica patch contro fixture
+# Verifica le patch contro i fixtures
 bun run verify:patches
 
-# Controlla sicurezza pubblicazione
+# Verifica la sicurezza di pubblicazione
 bun run check:publish-safety
 ```
 
@@ -174,4 +278,4 @@ bun run check:publish-safety
 
 MIT
 
-<!-- i18n:source-hash:5f30ef48aef04d659e3bd2e705b8b9250abb30ea042f84797e5d8997182de1af -->
+<!-- i18n:source-hash:a56b7af1f4a33a4d0553898a6602fee41a701faaa9cfdc5f4e759407ff545b7d -->
