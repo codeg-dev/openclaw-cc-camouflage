@@ -1,3 +1,12 @@
+> [!WARNING]
+> **This repository is archived.**
+>
+> The upstream emulator `not-claude-code-emulator` was archived and stopped
+> successfully spoofing Anthropic around midnight KST on 2026-04-06. Without a
+> working emulator the patch lifecycle this plugin maintains has no effect.
+> This repository is therefore also archived and is no longer maintained.
+> No further updates or bug fixes will be issued.
+
 <p align="center">
   <strong>English</strong> |
   <a href="README.ar.md">العربية</a> |
